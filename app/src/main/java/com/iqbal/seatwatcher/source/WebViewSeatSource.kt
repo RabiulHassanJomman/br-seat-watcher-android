@@ -99,6 +99,7 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
         val tokenKind: String = "",
         val tokensFound: Int = 0,
         val tried: Int = 0,
+        val withCookies: Boolean = false,
     ) {
         fun describe(url: String) = buildString {
             appendLine("API: ${url.substringBefore('?')}")
@@ -107,7 +108,7 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
             append("Login token found: $hasToken")
             if (tokenExp > 0) append(" (expires ${java.util.Date(tokenExp * 1000)})")
             appendLine()
-            if (hasToken) appendLine("Token used: $tokenKind; login tokens found: $tokensFound; tried: $tried")
+            if (hasToken) appendLine("Token used: $tokenKind; login tokens found: $tokensFound; tried: $tried; with site cookies: $withCookies")
             if (error.isNotBlank()) appendLine("Error: $error")
             appendLine("Response (start):")
             append(body.take(1500))
@@ -134,6 +135,7 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
                 tokenKind = o.optString("kind", ""),
                 tokensFound = o.optInt("n", 0),
                 tried = o.optInt("tried", 0),
+                withCookies = o.optBoolean("cred"),
             )
         }
         return ApiResult(-1, "", true, 0, "the API did not answer within ${API_TIMEOUT_MS / 1000}s")
@@ -263,12 +265,14 @@ if(fallback)consider(fallback);
 c.sort(function(a,b){if(a.access!==b.access)return a.access?-1:1;return b.exp-a.exp;});
 c=c.slice(0,3);
 function done(o){o.done=true;o.n=c.length;R[id]=o;}
-function attempt(i){var k=c[i];var h={'Accept':'application/json'};if(k)h['Authorization']='Bearer '+k.t;
-fetch(url,{method:'GET',headers:h}).then(function(r){return r.text().then(function(b){
-if(r.status===401&&i+1<c.length){attempt(i+1);return;}
-done({s:r.status,b:b.slice(0,600000),tok:!!k,exp:k?k.exp:0,kind:k?k.kind:'',tried:i+1});});})
-.catch(function(e){done({s:0,err:String(e),tok:!!k,exp:k?k.exp:0,kind:k?k.kind:'',tried:i+1});});}
-try{attempt(0);}catch(e){done({s:0,err:String(e),tok:c.length>0});}
+function attempt(i,cred){var k=c[i];var h={'Accept':'application/json'};if(k)h['Authorization']='Bearer '+k.t;
+var opt={method:'GET',headers:h};if(cred)opt.credentials='include';
+fetch(url,opt).then(function(r){return r.text().then(function(b){
+if(r.status===401&&cred){attempt(i,false);return;}
+if(r.status===401&&i+1<c.length){attempt(i+1,true);return;}
+done({s:r.status,b:b.slice(0,600000),tok:!!k,exp:k?k.exp:0,kind:k?k.kind:'',tried:i+1,cred:!!cred});});})
+.catch(function(e){if(cred){attempt(i,false);return;}done({s:0,err:String(e),tok:!!k,exp:k?k.exp:0,kind:k?k.kind:'',tried:i+1,cred:false});});}
+try{attempt(0,true);}catch(e){done({s:0,err:String(e),tok:c.length>0});}
 return 'started';}"""
     }
 }
