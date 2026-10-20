@@ -132,7 +132,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         SourceResult.Offline -> "Offline or the site did not load"
         is SourceResult.ParseFailed ->
             if (r.rawSample.startsWith("SITE_NOT_RESPONDING")) "Site not responding: its train search never finished"
-            else if (r.rawSample.startsWith("No trains in the API")) "The site lists no trains for this route and date"
+            else if (r.rawSample.startsWith("NO_TRAINS")) "The site lists no trains for this route and date"
             else "No trains found on the page (use Settings → Copy debug info)"
     }
 

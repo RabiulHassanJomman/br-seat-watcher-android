@@ -18,12 +18,12 @@ function add(m,u){var e={m:String(m||'GET').toUpperCase(),u:String(u||'').split(
 var F=window.fetch;if(F){window.fetch=function(i,init){var u=(i&&i.url)||i;var e=add((init&&init.method)||(i&&i.method),u);
 try{var hd=(init&&init.headers)||(i&&i.headers);if(hd){if(typeof Headers!=='undefined'&&hd instanceof Headers)hd.forEach(function(v,k){e.h.push(k);});else if(Array.isArray(hd))hd.forEach(function(p){e.h.push(p[0]);});else Object.keys(hd).forEach(function(k){e.h.push(k);});}
 e.c='fetch credentials='+String((init&&init.credentials)||(i&&i.credentials)||'default');}catch(x){}
-return F.apply(this,arguments).then(function(r){e.s=r.status;try{if(/search/i.test(e.u))r.clone().text().then(function(t){e.b=t.slice(0,300);});}catch(x){}return r;},function(err){e.s=0;e.err=String(err);throw err;});};}
+return F.apply(this,arguments).then(function(r){try{if(/search/i.test(e.u))r.clone().text().then(function(t){e.b=t.slice(0,300);if(/search-trips/i.test(e.u))e.full=t.slice(0,800000);e.s=r.status;},function(){e.s=r.status;});else e.s=r.status;}catch(x){e.s=r.status;}return r;},function(err){e.s=0;e.err=String(err);throw err;});};}
 var X=XMLHttpRequest.prototype,O=X.open,S=X.send,H=X.setRequestHeader;
 X.open=function(m,u){this.__bswE=add(m,u);return O.apply(this,arguments);};
 X.setRequestHeader=function(k,v){try{if(this.__bswE)this.__bswE.h.push(k);}catch(e){}return H.apply(this,arguments);};
 X.send=function(){var x=this,e=x.__bswE;try{if(e)e.c='xhr withCredentials='+x.withCredentials;}catch(z){}
-x.addEventListener('loadend',function(){if(!e)return;e.s=x.status;try{if(/search/i.test(e.u)&&(x.responseType===''||x.responseType==='text'))e.b=String(x.responseText).slice(0,300);}catch(z){}});
+x.addEventListener('loadend',function(){if(!e)return;try{if(/search/i.test(e.u)){var t=null;if(x.responseType===''||x.responseType==='text')t=String(x.responseText);else if(x.responseType==='json')t=JSON.stringify(x.response);if(t!=null){e.b=t.slice(0,300);if(/search-trips/i.test(e.u))e.full=t.slice(0,800000);}}}catch(z){}e.s=x.status;});
 return S.apply(this,arguments);};})();"""
 
     /** Returns the log as plain text. */
@@ -33,6 +33,17 @@ var ls=[];try{for(var i=0;i<localStorage.length;i++)ls.push(localStorage.key(i))
 out.push('');out.push('localStorage keys: '+ls.join(', '));out.push('sessionStorage keys: '+ss.join(', '));
 out.push('cookie names: '+document.cookie.split(';').map(function(c){return c.split('=')[0].trim();}).filter(Boolean).join(', '));
 return out.join('\n');}catch(x){return 'log error: '+x;}})()"""
+
+    /**
+     * For the background checker: the page URL, visible text, whether a password box is visible,
+     * and the latest finished trips-search call {s: status, b: body}. Never returns header values.
+     */
+    const val STATE_JS = """(function(){try{var L=window.__bswLog||[],t=null;
+for(var i=L.length-1;i>=0;i--){if(/search-trips/i.test(L[i].u)){t={s:L[i].s,b:(L[i].full||'')};break;}}
+var vis=false;var ps=document.querySelectorAll('input[type=password]');
+for(var j=0;j<ps.length;j++){var el=ps[j];var st=getComputedStyle(el);if(el.offsetWidth>0&&el.offsetHeight>0&&st.visibility!=='hidden'&&st.display!=='none'){vis=true;break;}}
+return JSON.stringify({u:location.href,t:(document.body?document.body.innerText:'').slice(0,20000),p:vis,trips:t,hook:!!window.__bswLog});
+}catch(x){return JSON.stringify({u:'',t:'',p:false,trips:null,hook:false});}})()"""
 
     /** Installs the logger before any page script runs; returns false if the WebView can't do that. */
     fun install(wv: WebView): Boolean = try {

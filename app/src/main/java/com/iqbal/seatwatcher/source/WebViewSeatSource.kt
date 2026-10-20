@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
+import android.view.View
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
@@ -12,6 +13,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.iqbal.seatwatcher.core.model.Watch
+import com.iqbal.seatwatcher.core.parser.PageParser
 import com.iqbal.seatwatcher.core.parser.TripJsonParser
 import com.iqbal.seatwatcher.core.source.SeatSource
 import com.iqbal.seatwatcher.core.source.SiteUrls
@@ -29,32 +31,29 @@ import org.json.JSONTokener
 import kotlin.coroutines.resume
 
 /**
- * Gets trains through the site's own search API (`search-trips-v2`), called from inside a hidden
- * WebView that has the e-ticket site open. The request is the one the site's page makes: same URL,
- * the user's own bearer token as saved by the site, no other headers added, nothing spoofed.
- * The token never leaves the WebView. It never books, fills or submits anything.
- *
- * The site renews its token itself when its page loads, so on a 401 the page is reloaded once
- * before reporting LoginRequired.
+ * Each check loads the e-ticket results page (`/booking/train/search?...&class=...`) in a hidden
+ * WebView that shares your login. The site's own code then runs its search; the app only reads the
+ * response of that request (read-only hook in [NetHook]) and parses it. The app sends no request
+ * of its own to the API, adds no headers, and never books, fills or submits anything.
  */
 class WebViewSeatSource(private val app: Context) : SeatSource {
     private val mutex = Mutex()
     private var webView: WebView? = null
-    private var loadedAt = 0L
-    private var calls = 0
-    private var load: CompletableDeferred<Int>? = null
+    private var hookEarly = false
+    private var cycles = 0
+    private var load: LoadTracker? = null
 
-    /** What the last check saw, for "Copy debug info". Never contains the token. */
+    /** What the last check saw, for "Copy debug info". Never contains tokens or header values. */
     @Volatile var lastRawText: String = ""
         private set
 
-    override suspend fun fetch(watch: Watch): SourceResult = fetchApi(SiteUrls.api(watch))
+    override suspend fun fetch(watch: Watch): SourceResult = fetchUrl(SiteUrls.search(watch))
 
-    suspend fun fetchApi(apiUrl: String): SourceResult = mutex.withLock {
+    suspend fun fetchUrl(url: String): SourceResult = mutex.withLock {
         if (!Net.isOnline(app)) return SourceResult.Offline
         withContext(Dispatchers.Main) {
             try {
-                withTimeoutOrNull(TOTAL_TIMEOUT_MS) { check(apiUrl) }
+                withTimeoutOrNull(TOTAL_TIMEOUT_MS) { check(url) }
                     ?: SourceResult.ParseFailed("$NOT_RESPONDING\n$lastRawText")
             } catch (e: Exception) {
                 Log.w(TAG, "check failed", e)
@@ -64,124 +63,116 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
         }
     }
 
-    private suspend fun check(apiUrl: String): SourceResult {
-        if (!ensureSitePage(forceReload = false)) return SourceResult.Offline
-        var r = call(apiUrl)
-        if (r.status == 401 || (r.status != 200 && !r.hasToken)) {
-            // Let the site's own page renew its session, then try once more.
-            if (!ensureSitePage(forceReload = true)) return SourceResult.Offline
-            delay(RENEW_WAIT_MS)
-            r = call(apiUrl)
-        }
-        lastRawText = r.describe(apiUrl)
-        return when {
-            r.status == 200 -> {
-                val trains = TripJsonParser.parse(r.body)
-                if (trains.isNotEmpty()) SourceResult.Success(trains)
-                else SourceResult.ParseFailed("No trains in the API response.\n$lastRawText")
+    private suspend fun check(url: String): SourceResult {
+        val wv = obtainWebView()
+        val t = LoadTracker()
+        load = t
+        wv.loadUrl(url)
+        withTimeoutOrNull(PAGE_LOAD_TIMEOUT_MS) { t.finished.await() } ?: return SourceResult.Offline
+        if (t.rendererGone) return SourceResult.ParseFailed("WebView renderer stopped; it will be recreated.")
+        if (t.mainFrameError != null) return SourceResult.Offline
+
+        val deadline = SystemClock.elapsedRealtime() + SEARCH_TIMEOUT_MS
+        var loginSince = 0L
+        var st = state(wv)
+        while (true) {
+            st.trips?.let { trips ->
+                if (trips.status >= 0) { // the site's own search finished
+                    lastRawText = summary(url, st)
+                    return fromTrips(trips, st)
+                }
             }
-            r.status == 401 || (!r.hasToken && r.status in 400..499) -> SourceResult.LoginRequired
-            r.status == 403 || r.status == 429 -> SourceResult.Blocked("The site's search API answered HTTP ${r.status}")
-            r.status == 0 -> SourceResult.Offline
-            r.status < 0 -> SourceResult.ParseFailed("$NOT_RESPONDING\n$lastRawText")
-            else -> SourceResult.ParseFailed(lastRawText)
-        }
-    }
-
-    // ---- API call inside the site's page ----------------------------------------------------
-
-    private data class ApiResult(
-        val status: Int,
-        val body: String,
-        val hasToken: Boolean,
-        val tokenExp: Long,
-        val error: String,
-        val tokenKind: String = "",
-        val tokensFound: Int = 0,
-        val tried: Int = 0,
-        val withCookies: Boolean = false,
-    ) {
-        fun describe(url: String) = buildString {
-            appendLine("API: ${url.substringBefore('?')}")
-            appendLine("Query: ${url.substringAfter('?', "")}")
-            appendLine("Status: ${if (status < 0) "no answer" else status.toString()}")
-            append("Login token found: $hasToken")
-            if (tokenExp > 0) append(" (expires ${java.util.Date(tokenExp * 1000)})")
-            appendLine()
-            if (hasToken) appendLine("Token used: $tokenKind; login tokens found: $tokensFound; tried: $tried; with site cookies: $withCookies")
-            if (error.isNotBlank()) appendLine("Error: $error")
-            appendLine("Response (start):")
-            append(body.take(1500))
-        }
-    }
-
-    private suspend fun call(apiUrl: String): ApiResult {
-        val wv = webView ?: return ApiResult(-1, "", false, 0, "no page")
-        val id = JSONObject.quote("c${++calls}")
-        val token = SessionToken.value?.let { JSONObject.quote(it) } ?: "null"
-        evaluate(wv, "(function(){$API_JS})()($id,${JSONObject.quote(apiUrl)},$token)")
-        val poll = "(function(){var R=window.__bswApi||{};var r=R[$id];if(r&&r.done){delete R[$id];}return JSON.stringify(r||null);})()"
-        val deadline = SystemClock.elapsedRealtime() + API_TIMEOUT_MS
-        while (SystemClock.elapsedRealtime() < deadline) {
+            val now = SystemClock.elapsedRealtime()
+            if (looksLikeLogin(st)) {
+                if (loginSince == 0L) loginSince = now
+                else if (now - loginSince >= LOGIN_CONFIRM_MS) {
+                    lastRawText = summary(url, st)
+                    return SourceResult.LoginRequired
+                }
+            } else loginSince = 0L
+            blockReason(st.text)?.let { lastRawText = summary(url, st); return SourceResult.Blocked(it) }
+            if (now >= deadline) break
             delay(POLL_MS)
-            val o = decodeObject(evaluate(wv, poll)) ?: continue
-            if (!o.optBoolean("done")) continue
-            return ApiResult(
-                status = o.optInt("s", 0),
-                body = o.optString("b", ""),
-                hasToken = o.optBoolean("tok"),
-                tokenExp = o.optLong("exp", 0),
-                error = o.optString("err", ""),
-                tokenKind = o.optString("kind", ""),
-                tokensFound = o.optInt("n", 0),
-                tried = o.optInt("tried", 0),
-                withCookies = o.optBoolean("cred"),
-            )
+            st = state(wv)
         }
-        return ApiResult(-1, "", true, 0, "the API did not answer within ${API_TIMEOUT_MS / 1000}s")
-    }
 
-    private suspend fun evaluate(wv: WebView, js: String): String? = suspendCancellableCoroutine { cont ->
-        wv.evaluateJavascript(js) { raw -> if (cont.isActive) cont.resume(raw) }
-    }
-
-    /** evaluateJavascript returns a JSON-encoded string; unwrap it and parse the object inside. */
-    private fun decodeObject(raw: String?): JSONObject? = try {
-        val s = JSONTokener(raw ?: "null").nextValue() as? String
-        if (s == null || s == "null") null else JSONObject(s)
-    } catch (e: Exception) {
-        null
-    }
-
-    // ---- The hidden site page -----------------------------------------------------------------
-
-    /** Makes sure the hidden WebView shows an e-ticket page, so the API call carries the site's origin. */
-    private suspend fun ensureSitePage(forceReload: Boolean): Boolean {
-        val fresh = webView == null || calls >= RECREATE_EVERY_CALLS
-        val stale = SystemClock.elapsedRealtime() - loadedAt > RELOAD_EVERY_MS
-        if (!fresh && !stale && !forceReload && loadedAt > 0) return true
-        if (fresh) {
-            destroyWebView()
-            calls = 0
-            createWebView()
-        }
-        val wv = webView ?: return false
-        val l = CompletableDeferred<Int>()
-        load = l
-        wv.loadUrl(SiteUrls.BASE)
-        val error = withTimeoutOrNull(PAGE_LOAD_TIMEOUT_MS) { l.await() }
-        if (error == null || error != 0) {
-            loadedAt = 0
-            return false
-        }
-        delay(PAGE_SETTLE_MS) // let the site's scripts start (and renew the session if needed)
-        loadedAt = SystemClock.elapsedRealtime()
+        // No search response seen: fall back to the rendered text, as the userscript did.
+        lastRawText = summary(url, st)
         CookieManager.getInstance().flush()
-        return true
+        val trains = PageParser.parse(st.text)
+        return when {
+            trains.isNotEmpty() -> SourceResult.Success(trains)
+            looksLikeLogin(st) -> SourceResult.LoginRequired
+            else -> SourceResult.ParseFailed("$NOT_RESPONDING\n$lastRawText")
+        }
     }
+
+    private fun fromTrips(trips: Trips, st: PageState): SourceResult = when (trips.status) {
+        200 -> {
+            val trains = TripJsonParser.parse(trips.body)
+            if (trains.isNotEmpty()) SourceResult.Success(trains)
+            else SourceResult.ParseFailed("$NO_TRAINS\n$lastRawText")
+        }
+        401 -> SourceResult.LoginRequired
+        403, 429 -> SourceResult.Blocked("The site's search answered HTTP ${trips.status}")
+        0 -> SourceResult.Offline
+        else -> SourceResult.ParseFailed(lastRawText)
+    }
+
+    // ---- reading the page --------------------------------------------------------------------
+
+    private data class Trips(val status: Int, val body: String)
+    private data class PageState(val url: String, val text: String, val visiblePassword: Boolean, val trips: Trips?, val hooked: Boolean)
+
+    private suspend fun state(wv: WebView): PageState {
+        val raw: String? = suspendCancellableCoroutine { cont ->
+            wv.evaluateJavascript(NetHook.STATE_JS) { r -> if (cont.isActive) cont.resume(r) }
+        }
+        return try {
+            val s = JSONTokener(raw ?: "null").nextValue() as? String ?: return PageState("", "", false, null, false)
+            val o = JSONObject(s)
+            val trips = o.optJSONObject("trips")?.let { Trips(it.optInt("s", -1), it.optString("b", "")) }
+            PageState(o.optString("u"), o.optString("t"), o.optBoolean("p"), trips, o.optBoolean("hook"))
+        } catch (e: Exception) {
+            PageState("", "", false, null, false)
+        }
+    }
+
+    private fun looksLikeLogin(p: PageState): Boolean {
+        if (PageParser.isLoaded(p.text)) return false
+        val u = p.url.lowercase()
+        return "/login" in u || "/auth" in u || "/signin" in u || p.visiblePassword
+    }
+
+    private fun blockReason(text: String): String? {
+        if (PageParser.isLoaded(text)) return null
+        return BLOCK_PATTERNS.firstOrNull { it.containsMatchIn(text) }
+            ?.let { "The site shows a check page (\"${it.find(text)?.value}\")" }
+    }
+
+    private fun summary(url: String, p: PageState) = buildString {
+        appendLine("Loaded: ${url.substringBefore('?')}?${url.substringAfter('?', "")}")
+        appendLine("Now at: ${p.url.substringBefore('?')}")
+        appendLine("Hook active: ${p.hooked}; visible password field: ${p.visiblePassword}")
+        val t = p.trips
+        if (t == null) appendLine("Site's trips search: not seen")
+        else {
+            appendLine("Site's trips search: ${if (t.status < 0) "pending" else "HTTP ${t.status}"}")
+            if (t.body.isNotEmpty()) appendLine("Response (start): ${t.body.take(600)}")
+        }
+        appendLine()
+        appendLine("Page text:")
+        append(p.text.take(1000))
+    }
+
+    // ---- the hidden WebView ------------------------------------------------------------------
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView() {
+    private fun obtainWebView(): WebView {
+        cycles++
+        val existing = webView
+        if (existing != null && cycles % RECREATE_EVERY != 0) return existing
+        destroyWebView()
         val wv = WebView(app)
         with(wv.settings) {
             javaScriptEnabled = true
@@ -196,24 +187,36 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
         }
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
+        // Never shown, but give it a phone-sized layout so the site lays out normally.
+        wv.measure(
+            View.MeasureSpec.makeMeasureSpec(WIDTH, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(HEIGHT, View.MeasureSpec.EXACTLY),
+        )
+        wv.layout(0, 0, WIDTH, HEIGHT)
+        hookEarly = NetHook.install(wv)
         wv.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                if (!hookEarly) view.evaluateJavascript(NetHook.INLINE_JS, null)
+            }
+
             override fun onPageFinished(view: WebView, url: String?) {
-                if (url != null && url != "about:blank") load?.complete(0)
+                if (url != null && url != "about:blank") load?.finished?.complete(Unit)
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame) load?.complete(error.errorCode)
+                if (request.isForMainFrame) {
+                    load?.mainFrameError = error.errorCode
+                    load?.finished?.complete(Unit)
+                }
             }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                 request.url.scheme != "https"
 
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-                load?.complete(-1)
-                if (view === webView) {
-                    webView = null
-                    loadedAt = 0
-                }
+                load?.rendererGone = true
+                load?.finished?.complete(Unit)
+                if (view === webView) webView = null
                 view.destroy()
                 return true // handled: never crash the app
             }
@@ -221,7 +224,7 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
         wv.onResume()
         wv.resumeTimers()
         webView = wv
-        loadedAt = 0
+        return wv
     }
 
     private fun destroyWebView() {
@@ -231,65 +234,34 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
             it.destroy()
         }
         webView = null
-        loadedAt = 0
+    }
+
+    private class LoadTracker {
+        val finished = CompletableDeferred<Unit>()
+        var mainFrameError: Int? = null
+        var rendererGone = false
     }
 
     companion object {
         private const val TAG = "WebViewSeatSource"
-        const val NOT_RESPONDING = "SITE_NOT_RESPONDING: the site's search request never finished."
-        private const val POLL_MS = 300L
-        private const val API_TIMEOUT_MS = 20_000L
+        const val NOT_RESPONDING = "SITE_NOT_RESPONDING: the site's search never finished."
+        const val NO_TRAINS = "NO_TRAINS: the site lists no trains for this route and date."
+        private const val WIDTH = 1080
+        private const val HEIGHT = 2400
+        private const val POLL_MS = 500L
         private const val PAGE_LOAD_TIMEOUT_MS = 30_000L
-        private const val PAGE_SETTLE_MS = 3_000L
-        private const val RENEW_WAIT_MS = 5_000L
-        private const val TOTAL_TIMEOUT_MS = 90_000L
-        private const val RELOAD_EVERY_MS = 30 * 60_000L
-        private const val RECREATE_EVERY_CALLS = 120
+        private const val SEARCH_TIMEOUT_MS = 25_000L
+        private const val LOGIN_CONFIRM_MS = 3_000L
+        private const val TOTAL_TIMEOUT_MS = 70_000L
+        private const val RECREATE_EVERY = 60
 
-        /**
-         * Body returning a JS function(id, url, fallbackToken). It finds the site's own login token
-         * in its storage (a JWT issued for the train IAM), calls the search API the way the site does,
-         * and stores {done, s, b, tok, exp} in window.__bswApi[id]. The token itself is never returned.
-         */
-        private const val API_JS = """return function(id,url,fallback){
-var R=window.__bswApi=window.__bswApi||{};R[id]={done:false};
-function part(t,i){try{var p=t.split('.')[i].replace(/-/g,'+').replace(/_/g,'/');while(p.length%4)p+='=';return JSON.parse(atob(p));}catch(e){return null;}}
-var seen={},c=[];
-function consider(t){if(seen[t])return;seen[t]=1;var h=part(t,0)||{},p=part(t,1);if(!p)return;
-var who=String(p.iss||'')+' '+String(p.aud||'');if(!/train/i.test(who))return;
-var access=String(h.typ||'').toLowerCase()==='at+jwt'||!!p.scope||!!p.client_id;
-c.push({t:t,exp:p.exp||0,access:access,kind:(access?'access':'id')+' token, aud='+String(p.aud||'')});}
-[window.localStorage,window.sessionStorage].forEach(function(st){try{for(var i=0;i<st.length;i++){var v=st.getItem(st.key(i))||'';
-(v.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)||[]).forEach(consider);}}catch(e){}});
-if(fallback)consider(fallback);
-c.sort(function(a,b){if(a.access!==b.access)return a.access?-1:1;return b.exp-a.exp;});
-c=c.slice(0,3);
-function done(o){o.done=true;o.n=c.length;R[id]=o;}
-function attempt(i,cred){var k=c[i];var h={'Accept':'application/json'};if(k)h['Authorization']='Bearer '+k.t;
-var opt={method:'GET',headers:h};if(cred)opt.credentials='include';
-fetch(url,opt).then(function(r){return r.text().then(function(b){
-if(r.status===401&&cred){attempt(i,false);return;}
-if(r.status===401&&i+1<c.length){attempt(i+1,true);return;}
-done({s:r.status,b:b.slice(0,600000),tok:!!k,exp:k?k.exp:0,kind:k?k.kind:'',tried:i+1,cred:!!cred});});})
-.catch(function(e){if(cred){attempt(i,false);return;}done({s:0,err:String(e),tok:!!k,exp:k?k.exp:0,kind:k?k.kind:'',tried:i+1,cred:false});});}
-try{attempt(0,true);}catch(e){done({s:0,err:String(e),tok:c.length>0});}
-return 'started';}"""
+        private val BLOCK_PATTERNS = listOf(
+            Regex("captcha", RegexOption.IGNORE_CASE),
+            Regex("verify (that )?you are (a )?human", RegexOption.IGNORE_CASE),
+            Regex("are you a robot", RegexOption.IGNORE_CASE),
+            Regex("too many requests", RegexOption.IGNORE_CASE),
+            Regex("access denied", RegexOption.IGNORE_CASE),
+            Regex("unusual traffic", RegexOption.IGNORE_CASE),
+        )
     }
-}
-
-/**
- * In-memory copy of the site's login token, read from the visible login WebView when the user taps
- * Done. Used only if the hidden page finds none in its own storage (e.g. the site keeps it per tab).
- * Never written to disk; gone when the app process ends.
- */
-object SessionToken {
-    @Volatile var value: String? = null
-
-    /** JS for the visible WebView: returns the freshest train-IAM JWT from the site's storage, or null. */
-    const val READ_JS = """(function(){function part(t,i){try{var p=t.split('.')[i].replace(/-/g,'+').replace(/_/g,'/');while(p.length%4)p+='=';return JSON.parse(atob(p));}catch(e){return null;}}
-var best=null,bestScore=-1;[window.localStorage,window.sessionStorage].forEach(function(st){try{for(var i=0;i<st.length;i++){var v=st.getItem(st.key(i))||'';
-(v.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)||[]).forEach(function(t){var h=part(t,0)||{},c=part(t,1);if(!c)return;
-if(!/train/i.test(String(c.iss||'')+' '+String(c.aud||'')))return;
-var access=String(h.typ||'').toLowerCase()==='at+jwt'||!!c.scope||!!c.client_id;var score=(access?1e12:0)+(c.exp||0);
-if(score>bestScore){best=t;bestScore=score;}});}}catch(e){}});return best;})()"""
 }

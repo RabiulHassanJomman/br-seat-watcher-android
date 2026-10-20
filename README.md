@@ -68,7 +68,7 @@ The setup guide walks you through these steps, and Settings → "Run setup guide
 ## How it checks
 
 - One foreground service (`specialUse` type) runs every enabled watch in a single loop. The defaults are one check every 60 s per watch (30 s minimum), at most 3 enabled watches, and 2–5 s of jitter between watches.
-- Each check calls the site's own search API (`railspaapi.shohoz.com/.../search-trips-v2`) from inside a hidden WebView that has eticket.railway.gov.bd open. It uses the login token the site itself saved, adds nothing else, and parses the JSON (`trip_number`, `seat_types[].type`, `seat_counts.online + offline`). The token never leaves the WebView. When the token has expired, the site's page is reloaded so the site renews it; if that fails you get "Login needed".
+- Each check loads the results page (`/booking/train/search?...&class=...`) in a hidden WebView that shares your login. The site's own code runs its search; the app only reads the response (`trip_number`, `seat_types[].type`, `seat_counts.online + offline`). It sends no API request of its own and adds no headers. If no response arrives, it falls back to parsing the page text.
 - Between checks the phone may sleep. An exact allow-while-idle alarm wakes it for the next check, and a wake lock is held only during the check itself.
 - If the site shows a captcha or block page, or answers 403/429, the app pauses and backs off exponentially (60 s → 5 min max) and posts a "Site is blocking checks" notification. A login page triggers backoff plus a "Login needed" notification. When offline, it retries with backoff.
 - A WorkManager watchdog runs every 15 min and restarts the service if Android killed it. A boot receiver resumes watching after a reboot.

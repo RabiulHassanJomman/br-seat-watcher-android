@@ -24,11 +24,12 @@ app/
 WatchService loop (every interval, or kicked)
   for each enabled watch (max 3, 2-5 s jitter):
     [wake lock 60 s] WatchChecker.check(watch)
-       AppSeatSource.fetch -> WebViewSeatSource (Main thread, one hidden WebView on eticket.railway.gov.bd)
-          fetch() search-trips-v2 inside the page with the site's own saved token
-          -> TripJsonParser.parse (online + offline per class)
-          401 -> reload the site page so it renews its token -> retry once -> LoginRequired
-          -> Success | LoginRequired | Blocked | Offline | ParseFailed(sample, never the token)
+       AppSeatSource.fetch -> WebViewSeatSource (Main thread, one hidden WebView)
+          load /booking/train/search?fromcity&tocity&doj&class  (class is required, as the site's form sends)
+          the site's own code calls search-trips-v2 with its own headers
+          NetHook (read-only) records that response -> TripJsonParser.parse (online + offline)
+          no response in 25 s -> PageParser on the rendered text (userscript method)
+          HTTP 401 or login page -> LoginRequired; 403/429 or captcha text -> Blocked
        Success: AlertEngine.evaluate with state from Room -> save merged counts
                 Alert -> Notifier.seatAlert (unless snoozed; quiet hours = silent) + alert_log
   global state -> StatusBus + ongoing notification + warnings
@@ -45,7 +46,7 @@ WatchService loop (every interval, or kicked)
 
 ## Why the API, not the rendered page
 
-Since Oct 2026 the results page only searches when reached through the site's form, so loading the results URL directly shows a spinner forever. The page's own data comes from `search-trips-v2` (verified with DevTools), which the app now calls from inside the site's page. `PageParser` (rendered text) is kept in core for reference and tests.
+The results page only runs its search when the URL includes `class` (the site's form always adds it); without it the page spins forever. The data comes from `search-trips-v2`, which needs the site's own device headers (`X-Device-Id`, `X-Device-Key`) besides the login token. The app does not recreate those: it lets the site's code make the request and only reads the response.
 
 ## Why these platform choices
 
