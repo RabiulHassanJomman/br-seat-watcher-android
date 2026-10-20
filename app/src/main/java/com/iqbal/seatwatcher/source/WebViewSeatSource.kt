@@ -96,6 +96,9 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
         val hasToken: Boolean,
         val tokenExp: Long,
         val error: String,
+        val tokenKind: String = "",
+        val tokensFound: Int = 0,
+        val tried: Int = 0,
     ) {
         fun describe(url: String) = buildString {
             appendLine("API: ${url.substringBefore('?')}")
@@ -104,6 +107,7 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
             append("Login token found: $hasToken")
             if (tokenExp > 0) append(" (expires ${java.util.Date(tokenExp * 1000)})")
             appendLine()
+            if (hasToken) appendLine("Token used: $tokenKind; login tokens found: $tokensFound; tried: $tried")
             if (error.isNotBlank()) appendLine("Error: $error")
             appendLine("Response (start):")
             append(body.take(1500))
@@ -127,6 +131,9 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
                 hasToken = o.optBoolean("tok"),
                 tokenExp = o.optLong("exp", 0),
                 error = o.optString("err", ""),
+                tokenKind = o.optString("kind", ""),
+                tokensFound = o.optInt("n", 0),
+                tried = o.optInt("tried", 0),
             )
         }
         return ApiResult(-1, "", true, 0, "the API did not answer within ${API_TIMEOUT_MS / 1000}s")
@@ -244,17 +251,24 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
          */
         private const val API_JS = """return function(id,url,fallback){
 var R=window.__bswApi=window.__bswApi||{};R[id]={done:false};
-function claims(t){try{var p=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');while(p.length%4)p+='=';return JSON.parse(atob(p));}catch(e){return null;}}
-var best=null,exp=0;
+function part(t,i){try{var p=t.split('.')[i].replace(/-/g,'+').replace(/_/g,'/');while(p.length%4)p+='=';return JSON.parse(atob(p));}catch(e){return null;}}
+var seen={},c=[];
+function consider(t){if(seen[t])return;seen[t]=1;var h=part(t,0)||{},p=part(t,1);if(!p)return;
+var who=String(p.iss||'')+' '+String(p.aud||'');if(!/train/i.test(who))return;
+var access=String(h.typ||'').toLowerCase()==='at+jwt'||!!p.scope||!!p.client_id;
+c.push({t:t,exp:p.exp||0,access:access,kind:(access?'access':'id')+' token, aud='+String(p.aud||'')});}
 [window.localStorage,window.sessionStorage].forEach(function(st){try{for(var i=0;i<st.length;i++){var v=st.getItem(st.key(i))||'';
-var m=v.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)||[];
-m.forEach(function(t){var c=claims(t);if(!c)return;var who=String(c.iss||'')+' '+String(c.aud||'');
-if(/train/i.test(who)&&(c.exp||0)>exp){best=t;exp=c.exp||0;}});}}catch(e){}});
-if(!best&&fallback){best=fallback;var fc=claims(fallback);exp=(fc&&fc.exp)||0;}
-var h={'Accept':'application/json'};if(best)h['Authorization']='Bearer '+best;
-try{fetch(url,{method:'GET',headers:h}).then(function(r){return r.text().then(function(b){R[id]={done:true,s:r.status,b:b.slice(0,600000),tok:!!best,exp:exp};});})
-.catch(function(e){R[id]={done:true,s:0,err:String(e),tok:!!best,exp:exp};});}
-catch(e){R[id]={done:true,s:0,err:String(e),tok:!!best,exp:exp};}
+(v.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)||[]).forEach(consider);}}catch(e){}});
+if(fallback)consider(fallback);
+c.sort(function(a,b){if(a.access!==b.access)return a.access?-1:1;return b.exp-a.exp;});
+c=c.slice(0,3);
+function done(o){o.done=true;o.n=c.length;R[id]=o;}
+function attempt(i){var k=c[i];var h={'Accept':'application/json'};if(k)h['Authorization']='Bearer '+k.t;
+fetch(url,{method:'GET',headers:h}).then(function(r){return r.text().then(function(b){
+if(r.status===401&&i+1<c.length){attempt(i+1);return;}
+done({s:r.status,b:b.slice(0,600000),tok:!!k,exp:k?k.exp:0,kind:k?k.kind:'',tried:i+1});});})
+.catch(function(e){done({s:0,err:String(e),tok:!!k,exp:k?k.exp:0,kind:k?k.kind:'',tried:i+1});});}
+try{attempt(0);}catch(e){done({s:0,err:String(e),tok:c.length>0});}
 return 'started';}"""
     }
 }
@@ -268,8 +282,10 @@ object SessionToken {
     @Volatile var value: String? = null
 
     /** JS for the visible WebView: returns the freshest train-IAM JWT from the site's storage, or null. */
-    const val READ_JS = """(function(){function claims(t){try{var p=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');while(p.length%4)p+='=';return JSON.parse(atob(p));}catch(e){return null;}}
-var best=null,exp=0;[window.localStorage,window.sessionStorage].forEach(function(st){try{for(var i=0;i<st.length;i++){var v=st.getItem(st.key(i))||'';
-var m=v.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)||[];m.forEach(function(t){var c=claims(t);if(!c)return;
-if(/train/i.test(String(c.iss||'')+' '+String(c.aud||''))&&(c.exp||0)>exp){best=t;exp=c.exp||0;}});}}catch(e){}});return best;})()"""
+    const val READ_JS = """(function(){function part(t,i){try{var p=t.split('.')[i].replace(/-/g,'+').replace(/_/g,'/');while(p.length%4)p+='=';return JSON.parse(atob(p));}catch(e){return null;}}
+var best=null,bestScore=-1;[window.localStorage,window.sessionStorage].forEach(function(st){try{for(var i=0;i<st.length;i++){var v=st.getItem(st.key(i))||'';
+(v.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)||[]).forEach(function(t){var h=part(t,0)||{},c=part(t,1);if(!c)return;
+if(!/train/i.test(String(c.iss||'')+' '+String(c.aud||'')))return;
+var access=String(h.typ||'').toLowerCase()==='at+jwt'||!!c.scope||!!c.client_id;var score=(access?1e12:0)+(c.exp||0);
+if(score>bestScore){best=t;bestScore=score;}});}}catch(e){}});return best;})()"""
 }
