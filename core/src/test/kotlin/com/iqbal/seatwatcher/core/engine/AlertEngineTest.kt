@@ -17,7 +17,8 @@ class AlertEngineTest {
     private fun watch(
         id: Long = 1, date: String = "2026-11-04", mode: WatchMode = WatchMode.ANY,
         train: String? = null, cls: String? = null, repeat: Double = 0.0, enabled: Boolean = true,
-    ) = Watch(id, "Chattogram", "Dhaka", date, mode, train, cls, repeat, enabled)
+        onIncrease: Boolean = false,
+    ) = Watch(id, "Chattogram", "Dhaka", date, mode, train, cls, repeat, enabled, onIncrease)
 
     private fun snap(vararg trains: Pair<String, List<Pair<String, Int>>>) =
         trains.map { (n, cs) -> TrainSnapshot(n, cs.map { ClassSeats(it.first, it.second) }) }
@@ -149,5 +150,46 @@ class AlertEngineTest {
         r.check(snap(suborno to listOf("AC_S" to 0)), 0)
         r.state = WatchState.EMPTY // toggled off then on
         assertEquals(Decision.NoAlert, r.check(snap(suborno to listOf("AC_S" to 3)), min))
+    }
+
+    @Test fun increaseIgnoredByDefault() {
+        val r = Runner(watch())
+        r.check(snap(suborno to listOf("AC_S" to 3)), 0)
+        assertEquals(Decision.NoAlert, r.check(snap(suborno to listOf("AC_S" to 5)), min))
+    }
+
+    @Test fun increaseAlertsWhenEnabled() {
+        val r = Runner(watch(onIncrease = true))
+        r.check(snap(suborno to listOf("AC_S" to 3)), 0)
+        val d = r.check(snap(suborno to listOf("AC_S" to 5)), min) as Decision.Alert
+        assertEquals("SUBORNO EXPRESS (701) AC_S: 5", d.text)
+        // Same count again: nothing new.
+        assertEquals(Decision.NoAlert, r.check(snap(suborno to listOf("AC_S" to 5)), 2 * min))
+    }
+
+    @Test fun decreaseNeverAlertsButTheNextIncreaseDoes() {
+        val r = Runner(watch(onIncrease = true))
+        r.check(snap(suborno to listOf("AC_S" to 5)), 0)
+        assertEquals(Decision.NoAlert, r.check(snap(suborno to listOf("AC_S" to 3)), min))
+        assertTrue(r.check(snap(suborno to listOf("AC_S" to 4)), 2 * min).isAlert())
+    }
+
+    @Test fun increaseModeOnlyReportsTheClassesThatGrew() {
+        val r = Runner(watch(onIncrease = true))
+        r.check(snap(suborno to listOf("AC_S" to 3, "F_SEAT" to 10)), 0)
+        val d = r.check(snap(suborno to listOf("AC_S" to 4, "F_SEAT" to 10)), min) as Decision.Alert
+        assertEquals(listOf("AC_S"), d.seats.map { it.label })
+    }
+
+    @Test fun increaseModeNoFalseAlertWhenCardReturns() {
+        val r = Runner(watch(onIncrease = true))
+        r.check(snap(suborno to listOf("AC_S" to 4), turna to listOf("S_CHAIR" to 9)), 0)
+        assertEquals(Decision.NoAlert, r.check(snap(suborno to listOf("AC_S" to 4)), min))
+        assertEquals(Decision.NoAlert, r.check(snap(suborno to listOf("AC_S" to 4), turna to listOf("S_CHAIR" to 9)), 2 * min))
+    }
+
+    @Test fun increaseModeBaselineStillSilent() {
+        val r = Runner(watch(onIncrease = true))
+        assertEquals(Decision.NoAlert, r.check(snap(suborno to listOf("AC_S" to 7)), 0))
     }
 }

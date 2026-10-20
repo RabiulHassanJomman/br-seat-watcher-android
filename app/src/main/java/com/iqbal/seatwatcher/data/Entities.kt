@@ -18,11 +18,13 @@ data class WatchEntity(
     val repeatMinutes: Double,
     val enabled: Boolean,
     val createdAt: Long = System.currentTimeMillis(),
+    @androidx.room.ColumnInfo(defaultValue = "0") val alertOnIncrease: Boolean = false,
 ) {
     fun toModel() = Watch(
         id = id, from = fromCity, to = toCity, dateIso = dateIso,
         mode = runCatching { WatchMode.valueOf(mode) }.getOrDefault(WatchMode.ANY),
         trainName = trainName, seatClass = seatClass, repeatMinutes = repeatMinutes, enabled = enabled,
+        alertOnIncrease = alertOnIncrease,
     )
 }
 

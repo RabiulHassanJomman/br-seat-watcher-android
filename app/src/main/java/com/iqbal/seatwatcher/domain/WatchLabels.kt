@@ -22,7 +22,7 @@ object WatchLabels {
     fun filter(w: Watch): String {
         val train = if (w.mode == WatchMode.ONE && !w.trainName.isNullOrBlank()) w.trainName else "Any train"
         val cls = w.seatClass?.takeIf { it.isNotBlank() } ?: "Any class"
-        return "$train · $cls"
+        return "$train · $cls" + if (w.alertOnIncrease) " · +increases" else ""
     }
 
     fun clock(ms: Long): String =

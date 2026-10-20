@@ -21,6 +21,8 @@ data class Watch(
     val seatClass: String?,
     val repeatMinutes: Double,
     val enabled: Boolean,
+    /** Also alert when a class that already had seats gets more (e.g. a cancellation, 3 -> 5). */
+    val alertOnIncrease: Boolean = false,
 ) {
     val searchKey: String get() = "$from|$to|$dateIso"
 }

@@ -49,7 +49,10 @@ object AlertEngine {
         )
         if (!hasBaseline) return EvalResult(Decision.NoAlert, saved, available)
 
-        val fresh = available.filter { (prevCounts[it.key] ?: 0) <= 0 }
+        val fresh = available.filter {
+            val prev = prevCounts[it.key] ?: 0
+            prev <= 0 || (watch.alertOnIncrease && it.count > prev)
+        }
         val repeatMs = (watch.repeatMinutes * 60_000).toLong()
         val repeatDue = watch.repeatMinutes > 0 && available.isNotEmpty() &&
             nowMs - saved.lastNotifiedAt >= repeatMs

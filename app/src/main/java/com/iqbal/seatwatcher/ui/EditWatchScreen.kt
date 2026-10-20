@@ -37,6 +37,9 @@ import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -81,6 +84,7 @@ fun EditWatchScreen(vm: AppViewModel, id: Long?, onDone: () -> Unit, snackbar: S
     var train by remember { mutableStateOf("") }
     var seatClass by remember { mutableStateOf("") }
     var repeatText by remember { mutableStateOf("0") }
+    var alertOnIncrease by remember { mutableStateOf(false) }
 
     var trains by remember { mutableStateOf<List<TrainSnapshot>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
@@ -97,6 +101,7 @@ fun EditWatchScreen(vm: AppViewModel, id: Long?, onDone: () -> Unit, snackbar: S
                 mode = runCatching { WatchMode.valueOf(e.mode) }.getOrDefault(WatchMode.ANY)
                 train = e.trainName.orEmpty()
                 seatClass = e.seatClass.orEmpty()
+                alertOnIncrease = e.alertOnIncrease
                 repeatText = e.repeatMinutes.let { if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString() }
                 manualTrain = train.isNotBlank()
             }
@@ -239,6 +244,23 @@ fun EditWatchScreen(vm: AppViewModel, id: Long?, onDone: () -> Unit, snackbar: S
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(value = alertOnIncrease, role = Role.Switch, onValueChange = { alertOnIncrease = it }),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Also alert when seats increase")
+                    Text(
+                        "e.g. 3 → 5 after a cancellation. Off: alert only when seats appear (0 → some).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = alertOnIncrease, onCheckedChange = null)
+            }
+
             Spacer(Modifier.height(4.dp))
             Button(
                 onClick = {
@@ -249,6 +271,7 @@ fun EditWatchScreen(vm: AppViewModel, id: Long?, onDone: () -> Unit, snackbar: S
                         trainName = if (mode == WatchMode.ONE) train.trim() else null,
                         seatClass = seatClass.ifBlank { null },
                         repeatMinutes = repeat ?: 0.0,
+                        alertOnIncrease = alertOnIncrease,
                         enabled = existing?.enabled ?: true,
                         createdAt = existing?.createdAt ?: System.currentTimeMillis(),
                     )
