@@ -68,7 +68,7 @@ The setup guide walks you through these steps, and Settings → "Run setup guide
 ## How it checks
 
 - One foreground service (`specialUse` type) runs every enabled watch in a single loop. The defaults are one check every 60 s per watch (30 s minimum), at most 3 enabled watches, and 2–5 s of jitter between watches.
-- Each check loads `/booking/train/search?fromcity=…&tocity=…&doj=dd-MMM-yyyy` in a hidden WebView. It waits for the cards to render, then parses the visible text exactly as the userscript did.
+- Each check calls the site's own search API (`railspaapi.shohoz.com/.../search-trips-v2`) from inside a hidden WebView that has eticket.railway.gov.bd open. It uses the login token the site itself saved, adds nothing else, and parses the JSON (`trip_number`, `seat_types[].type`, `seat_counts.online + offline`). The token never leaves the WebView. When the token has expired, the site's page is reloaded so the site renews it; if that fails you get "Login needed".
 - Between checks the phone may sleep. An exact allow-while-idle alarm wakes it for the next check, and a wake lock is held only during the check itself.
 - If the site shows a captcha or block page, or answers 403/429, the app pauses and backs off exponentially (60 s → 5 min max) and posts a "Site is blocking checks" notification. A login page triggers backoff plus a "Login needed" notification. When offline, it retries with backoff.
 - A WorkManager watchdog runs every 15 min and restarts the service if Android killed it. A boot receiver resumes watching after a reboot.
@@ -92,8 +92,7 @@ The setup guide walks you through these steps, and Settings → "Run setup guide
 
 These are flagged in code and need confirming on the real site:
 
-- **Login detection.** A check counts as needing login when no trains are found and the page shows a password field or the URL contains `/login`, `/auth` or `/signin`. If the site behaves differently, use Settings → **Copy debug info** and send it over.
+- **Login detection.** A check needs login when the search API answers 401 even after the site's page has had a chance to renew its token. Settings → **Copy debug info** shows the API status (never the token).
 - **Station list.** The From/To suggestions are not authoritative. Any text is accepted, and **Load trains** confirms whether the site accepts it.
-- **API source.** `ApiSeatSource` (OkHttp) can replace the WebView once a captured request (cURL/HAR) is available. The engine and UI won't change.
 
 See `docs/ARCHITECTURE.md` for the module layout.

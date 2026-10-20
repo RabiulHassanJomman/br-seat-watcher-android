@@ -38,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
+import com.iqbal.seatwatcher.source.SessionToken
+import org.json.JSONTokener
 
 /**
  * Visible WebView on the same session as the background checks. Login mode shows "Done".
@@ -77,7 +79,17 @@ fun WebScreen(url: String, loginMode: Boolean, onClose: () -> Unit, onDone: () -
                         IconButton(onClick = { webView?.reload() }) {
                             Icon(Icons.Default.Refresh, contentDescription = "Reload")
                         }
-                        if (loginMode) TextButton(onClick = { CookieManager.getInstance().flush(); onDone() }) { Text("Done") }
+                        if (loginMode) TextButton(onClick = {
+                            CookieManager.getInstance().flush()
+                            val wv = webView
+                            if (wv == null) onDone()
+                            else wv.evaluateJavascript(SessionToken.READ_JS) { raw ->
+                                // Keep the site's token in memory only, in case the site stores it per tab.
+                                val t = runCatching { JSONTokener(raw ?: "null").nextValue() as? String }.getOrNull()
+                                if (!t.isNullOrBlank()) SessionToken.value = t
+                                onDone()
+                            }
+                        }) { Text("Done") }
                     },
                 )
                 if (progress in 1..99) LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())

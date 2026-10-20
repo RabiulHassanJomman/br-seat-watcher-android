@@ -1,0 +1,657 @@
+{
+    "data": {
+        "trains": [
+            {
+                "trip_number": "PARJOTAK EXPRESS (816)",
+                "departure_date_time": "25 Oct, 06:15 am",
+                "departure_full_date": "2026-10-25",
+                "departure_date_time_jd": "Sun, 25 Oct 2026, 06:15 AM",
+                "arrival_date_time": "25 Oct, 11:20 am",
+                "travel_time": "05h 05m",
+                "origin_city_name": "dhaka",
+                "destination_city_name": "chattogram",
+                "seat_types": [
+                    {
+                        "key": 2,
+                        "type": "AC_S",
+                        "trip_id": 8617865,
+                        "trip_route_id": 59670826,
+                        "route_id": 25715,
+                        "fare": "985.00",
+                        "vat_percent": 15,
+                        "vat_amount": 148,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 3,
+                        "type": "SNIGDHA",
+                        "trip_id": 8617866,
+                        "trip_route_id": 59670831,
+                        "route_id": 25715,
+                        "fare": "820.00",
+                        "vat_percent": 15,
+                        "vat_amount": 123,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 7,
+                        "type": "S_CHAIR",
+                        "trip_id": 8617867,
+                        "trip_route_id": 59670837,
+                        "route_id": 25715,
+                        "fare": "495.00",
+                        "vat_percent": 0,
+                        "vat_amount": 0,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    }
+                ],
+                "train_model": "816",
+                "is_open_for_all": true,
+                "is_eid_trip": 0,
+                "parent_route": {
+                    "origin_city_name": "Dhaka",
+                    "destination_city_name": "Cox's Bazar",
+                    "departure_date": "2026-10-25",
+                    "departure_time": "06:15:00",
+                    "arrival_date": "2026-10-25",
+                    "arrival_time": "14:40:00"
+                },
+                "boarding_points": [
+                    {
+                        "trip_point_id": 111822754,
+                        "location_id": 2719,
+                        "location_name": "Kamalapur Station",
+                        "location_time": "06:15 AM",
+                        "location_date": "25 Oct 2026"
+                    }
+                ],
+                "is_international": 0,
+                "is_from_city_international": false
+            },
+            {
+                "trip_number": "SONAR BANGLA EXPRESS (788)",
+                "departure_date_time": "25 Oct, 07:00 am",
+                "departure_full_date": "2026-10-25",
+                "departure_date_time_jd": "Sun, 25 Oct 2026, 07:00 AM",
+                "arrival_date_time": "25 Oct, 11:55 am",
+                "travel_time": "04h 55m",
+                "origin_city_name": "dhaka",
+                "destination_city_name": "chattogram",
+                "seat_types": [
+                    {
+                        "key": 3,
+                        "type": "SNIGDHA",
+                        "trip_id": 8618047,
+                        "trip_route_id": 59677595,
+                        "route_id": 22014,
+                        "fare": "820.00",
+                        "vat_percent": 15,
+                        "vat_amount": 123,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 7,
+                        "type": "S_CHAIR",
+                        "trip_id": 8618048,
+                        "trip_route_id": 59677598,
+                        "route_id": 22014,
+                        "fare": "495.00",
+                        "vat_percent": 0,
+                        "vat_amount": 0,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 2,
+                        "type": "AC_S",
+                        "trip_id": 8618049,
+                        "trip_route_id": 59677601,
+                        "route_id": 22014,
+                        "fare": "985.00",
+                        "vat_percent": 15,
+                        "vat_amount": 148,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 5,
+                        "type": "F_SEAT",
+                        "trip_id": 8618050,
+                        "trip_route_id": 59677602,
+                        "route_id": 22014,
+                        "fare": "655.00",
+                        "vat_percent": 15,
+                        "vat_amount": 99,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    }
+                ],
+                "train_model": "788",
+                "is_open_for_all": true,
+                "is_eid_trip": 0,
+                "parent_route": {
+                    "origin_city_name": "dhaka",
+                    "destination_city_name": "chattogram",
+                    "departure_date": "2026-10-25",
+                    "departure_time": "07:00:00",
+                    "arrival_date": "2026-10-25",
+                    "arrival_time": "11:55:00"
+                },
+                "boarding_points": [
+                    {
+                        "trip_point_id": 111826713,
+                        "location_id": 2719,
+                        "location_name": "Kamalapur Station",
+                        "location_time": "07:00 AM",
+                        "location_date": "25 Oct 2026"
+                    }
+                ],
+                "is_international": 0,
+                "is_from_city_international": false
+            },
+            {
+                "trip_number": "MAHANAGAR PROVATI (704)",
+                "departure_date_time": "25 Oct, 07:45 am",
+                "departure_full_date": "2026-10-25",
+                "departure_date_time_jd": "Sun, 25 Oct 2026, 07:45 AM",
+                "arrival_date_time": "25 Oct, 01:35 pm",
+                "travel_time": "05h 50m",
+                "origin_city_name": "dhaka",
+                "destination_city_name": "chattogram",
+                "seat_types": [
+                    {
+                        "key": 7,
+                        "type": "S_CHAIR",
+                        "trip_id": 8617960,
+                        "trip_route_id": 59675179,
+                        "route_id": 22038,
+                        "fare": "450.00",
+                        "vat_percent": 0,
+                        "vat_amount": 0,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 12,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 5,
+                        "type": "F_SEAT",
+                        "trip_id": 8617961,
+                        "trip_route_id": 59675210,
+                        "route_id": 22038,
+                        "fare": "595.00",
+                        "vat_percent": 15,
+                        "vat_amount": 90,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 12,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 2,
+                        "type": "AC_S",
+                        "trip_id": 8617962,
+                        "trip_route_id": 59675235,
+                        "route_id": 22038,
+                        "fare": "895.00",
+                        "vat_percent": 15,
+                        "vat_amount": 135,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 12,
+                        "seat_counts": {
+                            "online": 1,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 3,
+                        "type": "SNIGDHA",
+                        "trip_id": 8617963,
+                        "trip_route_id": 59675263,
+                        "route_id": 22038,
+                        "fare": "745.00",
+                        "vat_percent": 15,
+                        "vat_amount": 112,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 12,
+                        "seat_counts": {
+                            "online": 1,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    }
+                ],
+                "train_model": "704",
+                "is_open_for_all": true,
+                "is_eid_trip": 0,
+                "parent_route": {
+                    "origin_city_name": "dhaka",
+                    "destination_city_name": "chattogram",
+                    "departure_date": "2026-10-25",
+                    "departure_time": "07:45:00",
+                    "arrival_date": "2026-10-25",
+                    "arrival_time": "13:35:00"
+                },
+                "boarding_points": [
+                    {
+                        "trip_point_id": 111825121,
+                        "location_id": 2719,
+                        "location_name": "Kamalapur Station",
+                        "location_time": "07:45 AM",
+                        "location_date": "25 Oct 2026"
+                    }
+                ],
+                "is_international": 0,
+                "is_from_city_international": false
+            },
+            {
+                "trip_number": "CHATTALA EXPRESS (802)",
+                "departure_date_time": "25 Oct, 02:15 pm",
+                "departure_full_date": "2026-10-25",
+                "departure_date_time_jd": "Sun, 25 Oct 2026, 02:15 PM",
+                "arrival_date_time": "25 Oct, 08:30 pm",
+                "travel_time": "06h 15m",
+                "origin_city_name": "dhaka",
+                "destination_city_name": "chattogram",
+                "seat_types": [
+                    {
+                        "key": 3,
+                        "type": "SNIGDHA",
+                        "trip_id": 8618060,
+                        "trip_route_id": 59677801,
+                        "route_id": 22940,
+                        "fare": "745.00",
+                        "vat_percent": 15,
+                        "vat_amount": 112,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 16,
+                        "seat_counts": {
+                            "online": 16,
+                            "offline": 15,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 2,
+                        "type": "AC_S",
+                        "trip_id": 8618061,
+                        "trip_route_id": 59677826,
+                        "route_id": 22940,
+                        "fare": "895.00",
+                        "vat_percent": 15,
+                        "vat_amount": 135,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 16,
+                        "seat_counts": {
+                            "online": 2,
+                            "offline": 1,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 7,
+                        "type": "S_CHAIR",
+                        "trip_id": 8618062,
+                        "trip_route_id": 59677835,
+                        "route_id": 22940,
+                        "fare": "450.00",
+                        "vat_percent": 0,
+                        "vat_amount": 0,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 16,
+                        "seat_counts": {
+                            "online": 16,
+                            "offline": 16,
+                            "is_divided": true
+                        }
+                    }
+                ],
+                "train_model": "802",
+                "is_open_for_all": true,
+                "is_eid_trip": 0,
+                "parent_route": {
+                    "origin_city_name": "dhaka",
+                    "destination_city_name": "chattogram",
+                    "departure_date": "2026-10-25",
+                    "departure_time": "14:15:00",
+                    "arrival_date": "2026-10-25",
+                    "arrival_time": "20:30:00"
+                },
+                "boarding_points": [
+                    {
+                        "trip_point_id": 111826883,
+                        "location_id": 2719,
+                        "location_name": "Kamalapur Station",
+                        "location_time": "02:15 PM",
+                        "location_date": "25 Oct 2026"
+                    }
+                ],
+                "is_international": 0,
+                "is_from_city_international": false
+            },
+            {
+                "trip_number": "SUBORNO EXPRESS (702)",
+                "departure_date_time": "25 Oct, 04:30 pm",
+                "departure_full_date": "2026-10-25",
+                "departure_date_time_jd": "Sun, 25 Oct 2026, 04:30 PM",
+                "arrival_date_time": "25 Oct, 09:25 pm",
+                "travel_time": "04h 55m",
+                "origin_city_name": "dhaka",
+                "destination_city_name": "chattogram",
+                "seat_types": [
+                    {
+                        "key": 5,
+                        "type": "F_SEAT",
+                        "trip_id": 8617952,
+                        "trip_route_id": 59675083,
+                        "route_id": 22014,
+                        "fare": "655.00",
+                        "vat_percent": 15,
+                        "vat_amount": 99,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 2,
+                        "type": "AC_S",
+                        "trip_id": 8617953,
+                        "trip_route_id": 59675084,
+                        "route_id": 22014,
+                        "fare": "985.00",
+                        "vat_percent": 15,
+                        "vat_amount": 148,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 2,
+                            "offline": 2,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 7,
+                        "type": "S_CHAIR",
+                        "trip_id": 8617954,
+                        "trip_route_id": 59675087,
+                        "route_id": 22014,
+                        "fare": "495.00",
+                        "vat_percent": 0,
+                        "vat_amount": 0,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 3,
+                        "type": "SNIGDHA",
+                        "trip_id": 8617955,
+                        "trip_route_id": 59675090,
+                        "route_id": 22014,
+                        "fare": "820.00",
+                        "vat_percent": 15,
+                        "vat_amount": 123,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    }
+                ],
+                "train_model": "702",
+                "is_open_for_all": true,
+                "is_eid_trip": 0,
+                "parent_route": {
+                    "origin_city_name": "dhaka",
+                    "destination_city_name": "chattogram",
+                    "departure_date": "2026-10-25",
+                    "departure_time": "16:30:00",
+                    "arrival_date": "2026-10-25",
+                    "arrival_time": "21:25:00"
+                },
+                "boarding_points": [
+                    {
+                        "trip_point_id": 111825042,
+                        "location_id": 2719,
+                        "location_name": "Kamalapur Station",
+                        "location_time": "04:30 PM",
+                        "location_date": "25 Oct 2026"
+                    }
+                ],
+                "is_international": 0,
+                "is_from_city_international": false
+            },
+            {
+                "trip_number": "COXS BAZAR EXPRESS (814)",
+                "departure_date_time": "25 Oct, 11:00 pm",
+                "departure_full_date": "2026-10-25",
+                "departure_date_time_jd": "Sun, 25 Oct 2026, 11:00 PM",
+                "arrival_date_time": "26 Oct, 04:00 am",
+                "travel_time": "05h 00m",
+                "origin_city_name": "dhaka",
+                "destination_city_name": "chattogram",
+                "seat_types": [
+                    {
+                        "key": 7,
+                        "type": "S_CHAIR",
+                        "trip_id": 8617859,
+                        "trip_route_id": 59670805,
+                        "route_id": 25715,
+                        "fare": "495.00",
+                        "vat_percent": 0,
+                        "vat_amount": 0,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 3,
+                        "type": "SNIGDHA",
+                        "trip_id": 8617860,
+                        "trip_route_id": 59670810,
+                        "route_id": 25715,
+                        "fare": "820.00",
+                        "vat_percent": 15,
+                        "vat_amount": 123,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 3,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    }
+                ],
+                "train_model": "814",
+                "is_open_for_all": true,
+                "is_eid_trip": 0,
+                "parent_route": {
+                    "origin_city_name": "Dhaka",
+                    "destination_city_name": "Cox's Bazar",
+                    "departure_date": "2026-10-25",
+                    "departure_time": "23:00:00",
+                    "arrival_date": "2026-10-26",
+                    "arrival_time": "07:20:00"
+                },
+                "boarding_points": [
+                    {
+                        "trip_point_id": 111822728,
+                        "location_id": 2719,
+                        "location_name": "Kamalapur Station",
+                        "location_time": "11:00 PM",
+                        "location_date": "25 Oct 2026"
+                    }
+                ],
+                "is_international": 0,
+                "is_from_city_international": false
+            },
+            {
+                "trip_number": "TURNA (742)",
+                "departure_date_time": "25 Oct, 11:15 pm",
+                "departure_full_date": "2026-10-25",
+                "departure_date_time_jd": "Sun, 25 Oct 2026, 11:15 PM",
+                "arrival_date_time": "26 Oct, 05:15 am",
+                "travel_time": "06h 00m",
+                "origin_city_name": "dhaka",
+                "destination_city_name": "chattogram",
+                "seat_types": [
+                    {
+                        "key": 7,
+                        "type": "S_CHAIR",
+                        "trip_id": 8618023,
+                        "trip_route_id": 59677005,
+                        "route_id": 22827,
+                        "fare": "450.00",
+                        "vat_percent": 0,
+                        "vat_amount": 0,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 9,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 4,
+                        "type": "F_BERTH",
+                        "trip_id": 8618024,
+                        "trip_route_id": 59677023,
+                        "route_id": 22827,
+                        "fare": "895.00",
+                        "vat_percent": 15,
+                        "vat_amount": 135,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 9,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 1,
+                        "type": "AC_B",
+                        "trip_id": 8618025,
+                        "trip_route_id": 59677037,
+                        "route_id": 22827,
+                        "fare": "1340.00",
+                        "vat_percent": 15,
+                        "vat_amount": 201,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 9,
+                        "seat_counts": {
+                            "online": 0,
+                            "offline": 0,
+                            "is_divided": true
+                        }
+                    },
+                    {
+                        "key": 3,
+                        "type": "SNIGDHA",
+                        "trip_id": 8618026,
+                        "trip_route_id": 59677051,
+                        "route_id": 22827,
+                        "fare": "745.00",
+                        "vat_percent": 15,
+                        "vat_amount": 112,
+                        "origin_city_seq": 1,
+                        "destination_city_seq": 9,
+                        "seat_counts": {
+                            "online": 31,
+                            "offline": 30,
+                            "is_divided": true
+                        }
+                    }
+                ],
+                "train_model": "742",
+                "is_open_for_all": true,
+                "is_eid_trip": 0,
+                "parent_route": {
+                    "origin_city_name": "dhaka",
+                    "destination_city_name": "chattogram",
+                    "departure_date": "2026-10-25",
+                    "departure_time": "23:15:00",
+                    "arrival_date": "2026-10-26",
+                    "arrival_time": "05:15:00"
+                },
+                "boarding_points": [
+                    {
+                        "trip_point_id": 111826303,
+                        "location_id": 2719,
+                        "location_name": "Kamalapur Station",
+                        "location_time": "11:15 PM",
+                        "location_date": "25 Oct 2026"
+                    }
+                ],
+                "is_international": 0,
+                "is_from_city_international": false
+            }
+        ],
+        "recommendations": [],
+        "selected_seat_class": "S_CHAIR"
+    },
+    "extra": {
+        "hash": "AC3541932C2D470D683A15D48844790A"
+    }
+}

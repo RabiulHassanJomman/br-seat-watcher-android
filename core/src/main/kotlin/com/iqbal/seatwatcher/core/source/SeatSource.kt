@@ -30,11 +30,22 @@ object SiteUrls {
 
     private fun enc(s: String) = URLEncoder.encode(s.trim(), "UTF-8").replace("+", "%20")
 
-    /** The `class` param only highlights a card, so it is omitted. */
-    fun search(from: String, to: String, dateIso: String): String =
-        "$BASE/booking/train/search?fromcity=${enc(from)}&tocity=${enc(to)}&doj=${siteDate(dateIso)}"
+    /** Search API the site's own page calls (verified with DevTools, Oct 2026). Needs the user's bearer token. */
+    const val API_SEARCH = "https://railspaapi.shohoz.com/v1.0/web/bookings/search-trips-v2"
 
-    fun search(watch: Watch) = search(watch.from, watch.to, watch.dateIso)
+    /** The site always sends a class; the response still lists every class. */
+    fun seatClassOrDefault(watch: Watch): String = watch.seatClass?.takeIf { it.isNotBlank() } ?: "S_CHAIR"
+
+    /** Results page. The site's own form adds `class`, and the page may not search without it. */
+    fun search(from: String, to: String, dateIso: String, seatClass: String = "S_CHAIR"): String =
+        "$BASE/booking/train/search?fromcity=${enc(from)}&tocity=${enc(to)}&doj=${siteDate(dateIso)}&class=${enc(seatClass)}"
+
+    fun search(watch: Watch) = search(watch.from, watch.to, watch.dateIso, seatClassOrDefault(watch))
+
+    fun api(from: String, to: String, dateIso: String, seatClass: String = "S_CHAIR"): String =
+        "$API_SEARCH?from_city=${enc(from)}&to_city=${enc(to)}&date_of_journey=${siteDate(dateIso)}&seat_class=${enc(seatClass)}"
+
+    fun api(watch: Watch) = api(watch.from, watch.to, watch.dateIso, seatClassOrDefault(watch))
 }
 
 /** Compact text encoding for storing a snapshot (no JSON dependency in core). */

@@ -24,6 +24,20 @@ class TripJsonParserTest {
         assertEquals(listOf(ClassSeats("F_SEAT", 14)), trains[1].classes)
     }
 
+    /** Real search-trips-v2 response captured from the site (Dhaka -> Chattogram, 25 Oct 2026). */
+    @Test fun parsesRealSiteResponse() {
+        val json = javaClass.getResource("/search-trips-v2.json")!!.readText()
+        val trains = TripJsonParser.parse(json)
+        assertEquals(7, trains.size)
+        assertEquals("PARJOTAK EXPRESS (816)", trains[0].name)
+        assertEquals(listOf("AC_S", "SNIGDHA", "S_CHAIR"), trains[0].classes.map { it.label })
+        val mahanagar = trains.single { it.name == "MAHANAGAR PROVATI (704)" }
+        assertEquals(ClassSeats("AC_S", 1), mahanagar.classes.single { it.label == "AC_S" })
+        val chattala = trains.single { it.name == "CHATTALA EXPRESS (802)" }
+        assertEquals(listOf(31, 3, 32), chattala.classes.map { it.count })
+        assertEquals(ClassSeats("SNIGDHA", 61), trains.single { it.name == "TURNA (742)" }.classes.last())
+    }
+
     @Test fun unknownShapeGivesNothing() {
         assertTrue(TripJsonParser.parse("""{"data":{"items":[{"name":"X","count":5}]}}""").isEmpty())
         assertTrue(TripJsonParser.parse("not json").isEmpty())

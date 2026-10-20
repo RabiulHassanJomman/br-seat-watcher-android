@@ -24,10 +24,11 @@ app/
 WatchService loop (every interval, or kicked)
   for each enabled watch (max 3, 2-5 s jitter):
     [wake lock 60 s] WatchChecker.check(watch)
-       AppSeatSource.fetch -> WebViewSeatSource (Main thread, one WebView, recreated every 30 cycles)
-          load search URL -> onPageFinished -> poll innerText every 600 ms (<= 20 s)
-          -> "Available Tickets"/"BOOK NOW" seen -> wait 1.2 s -> read again -> PageParser.parse
-          -> Success | LoginRequired | Blocked | Offline | ParseFailed(2 KB sample)
+       AppSeatSource.fetch -> WebViewSeatSource (Main thread, one hidden WebView on eticket.railway.gov.bd)
+          fetch() search-trips-v2 inside the page with the site's own saved token
+          -> TripJsonParser.parse (online + offline per class)
+          401 -> reload the site page so it renews its token -> retry once -> LoginRequired
+          -> Success | LoginRequired | Blocked | Offline | ParseFailed(sample, never the token)
        Success: AlertEngine.evaluate with state from Room -> save merged counts
                 Alert -> Notifier.seatAlert (unless snoozed; quiet hours = silent) + alert_log
   global state -> StatusBus + ongoing notification + warnings
@@ -42,9 +43,9 @@ WatchService loop (every interval, or kicked)
 - Pressing Start, switching a watch back on, or saving an edit clears that watch's state. Its next check is then a baseline and sends no alert.
 - Disabled watches never alert. Each watch's state lives in its own rows, so watches never share state.
 
-## Adding an API source later
+## Why the API, not the rendered page
 
-Implement `SeatSource` with OkHttp + kotlinx.serialization (`ApiSeatSource`) and return the same `SourceResult` values. In `AppSeatSource.fetch`, try the API first and fall back to `webView.fetch`. Nothing in `core/engine`, `domain` or `ui` changes.
+Since Oct 2026 the results page only searches when reached through the site's form, so loading the results URL directly shows a spinner forever. The page's own data comes from `search-trips-v2` (verified with DevTools), which the app now calls from inside the site's page. `PageParser` (rendered text) is kept in core for reference and tests.
 
 ## Why these platform choices
 

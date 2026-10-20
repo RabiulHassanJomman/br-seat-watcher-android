@@ -112,7 +112,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         say("Checking your session…")
         val first = c.db.watches().all().firstOrNull()?.toModel()
         val probe = first ?: Watch(-1, "Dhaka", "Chattogram", LocalDate.now().plusDays(1).toString(), WatchMode.ANY, null, null, 0.0, false)
-        val r = c.webSource.fetchUrl(SiteUrls.search(probe))
+        val r = c.webSource.fetch(probe)
         say(
             when (r) {
                 is SourceResult.Success -> "Session OK: found ${r.snapshot.size} trains"
@@ -130,7 +130,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         SourceResult.LoginRequired -> "Login needed: log in from the status card"
         is SourceResult.Blocked -> "Site asked for a check: ${r.reason}"
         SourceResult.Offline -> "Offline or the site did not load"
-        is SourceResult.ParseFailed -> "No trains found on the page (use Settings → Copy debug info)"
+        is SourceResult.ParseFailed ->
+            if (r.rawSample.startsWith("SITE_NOT_RESPONDING")) "Site not responding: its train search never finished"
+            else if (r.rawSample.startsWith("No trains in the API")) "The site lists no trains for this route and date"
+            else "No trains found on the page (use Settings → Copy debug info)"
     }
 
     fun stopAlarm() = AlarmPlayer.stop()
