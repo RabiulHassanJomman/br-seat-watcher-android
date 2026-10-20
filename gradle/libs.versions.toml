@@ -11,6 +11,7 @@ room = "2.8.3"
 datastore = "1.1.7"
 work = "2.10.2"
 junit = "4.13.2"
+webkit = "1.12.1"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -32,6 +33,7 @@ room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 junit = { module = "junit:junit", version.ref = "junit" }
+androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

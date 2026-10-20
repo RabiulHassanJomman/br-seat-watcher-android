@@ -106,6 +106,7 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.datastore.preferences)
     implementation(libs.work.runtime.ktx)
+    implementation(libs.androidx.webkit)
 
     testImplementation(libs.junit)
 }

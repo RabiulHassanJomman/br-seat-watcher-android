@@ -13,8 +13,11 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import com.iqbal.seatwatcher.core.model.Watch
 import com.iqbal.seatwatcher.core.parser.PageParser
+import com.iqbal.seatwatcher.core.parser.TripJsonParser
 import com.iqbal.seatwatcher.core.source.SeatSource
 import com.iqbal.seatwatcher.core.source.SiteUrls
 import com.iqbal.seatwatcher.core.source.SourceResult
@@ -31,9 +34,10 @@ import org.json.JSONTokener
 import kotlin.coroutines.resume
 
 /**
- * Loads the public results URL in a hidden WebView that shares the login session,
- * waits for the Angular cards to render, and parses document.body.innerText.
- * It never clicks, fills or submits anything.
+ * Loads the results URL in a hidden WebView that shares the login session.
+ * Reads trains from the search API response the page itself downloads (a hidden WebView is
+ * throttled and may never render the cards), falling back to parsing document.body.innerText.
+ * It never clicks, fills or submits anything, and never alters a request.
  */
 class WebViewSeatSource(private val app: Context) : SeatSource {
     private val mutex = Mutex()
@@ -77,7 +81,15 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
         var loginSince = 0L
         var page = read(wv)
         while (true) {
-            blockReason(page)?.let { lastRawText = page.text; return SourceResult.Blocked(it) }
+            // 1) The search API response the page itself downloaded. Works even when the
+            //    hidden WebView is throttled and never renders the cards.
+            when (val api = fromApi(page)) {
+                is SourceResult.Success -> { lastRawText = summary(page); return api }
+                SourceResult.LoginRequired, is SourceResult.Blocked -> { lastRawText = summary(page); return api }
+                else -> Unit
+            }
+            // 2) Rendered text, as in the userscript.
+            blockReason(page)?.let { lastRawText = summary(page); return SourceResult.Blocked(it) }
             if (PageParser.isLoaded(page.text)) {
                 delay(SETTLE_MS) // let every train card render
                 page = read(wv)
@@ -87,7 +99,7 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
             if (looksLikeLogin(page)) {
                 if (loginSince == 0L) loginSince = now
                 else if (now - loginSince >= LOGIN_CONFIRM_MS) {
-                    lastRawText = page.text
+                    lastRawText = summary(page)
                     return SourceResult.LoginRequired
                 }
             } else loginSince = 0L
@@ -96,17 +108,21 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
             page = read(wv)
         }
 
-        lastRawText = page.text
+        lastRawText = summary(page)
         CookieManager.getInstance().flush()
         val trains = PageParser.parse(page.text)
         return when {
             trains.isNotEmpty() -> SourceResult.Success(trains)
+            fromApi(page) is SourceResult.Success -> fromApi(page)
             looksLikeLogin(page) -> SourceResult.LoginRequired
-            else -> SourceResult.ParseFailed("URL: ${page.url}\n\n${page.text.take(SAMPLE)}")
+            else -> SourceResult.ParseFailed(lastRawText.take(SAMPLE))
         }
     }
 
-    private data class Page(val url: String, val text: String, val hasPassword: Boolean)
+    /** A network response captured by HOOK_JS. Bodies are kept only for train-search URLs. */
+    private data class Captured(val url: String, val status: Int, val body: String?)
+
+    private data class Page(val url: String, val text: String, val visiblePassword: Boolean, val responses: List<Captured>)
 
     private suspend fun read(wv: WebView): Page = suspendCancellableCoroutine { cont ->
         wv.evaluateJavascript(READ_JS) { raw ->
@@ -115,23 +131,66 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
     }
 
     private fun decode(raw: String?): Page = try {
-        val s = JSONTokener(raw ?: "null").nextValue() as? String ?: return Page("", "", false)
+        val s = JSONTokener(raw ?: "null").nextValue() as? String ?: return Page("", "", false, emptyList())
         val o = JSONObject(s)
-        Page(o.optString("u"), o.optString("t"), o.optBoolean("p"))
+        val arr = o.optJSONArray("r")
+        val responses = buildList {
+            if (arr != null) for (i in 0 until arr.length()) {
+                val r = arr.optJSONObject(i) ?: continue
+                add(Captured(r.optString("u"), r.optInt("s"), if (r.has("b") && !r.isNull("b")) r.optString("b") else null))
+            }
+        }
+        Page(o.optString("u"), o.optString("t"), o.optBoolean("p"), responses)
     } catch (e: Exception) {
-        Page("", "", false)
+        Page("", "", false, emptyList())
+    }
+
+    private fun isSearchApi(url: String) = SEARCH_API.containsMatchIn(url) && !url.endsWith(".js") && !url.contains("/assets/")
+
+    /** Success / LoginRequired / Blocked from the captured search API call, or ParseFailed if there is none yet. */
+    private fun fromApi(p: Page): SourceResult {
+        val calls = p.responses.filter { isSearchApi(it.url) }
+        for (c in calls.asReversed()) {
+            when (c.status) {
+                401 -> return SourceResult.LoginRequired
+                403, 429 -> return SourceResult.Blocked("The site's search API answered HTTP ${c.status}")
+            }
+            val body = c.body ?: continue
+            if (c.status in 200..299) {
+                val trains = TripJsonParser.parse(body)
+                if (trains.isNotEmpty()) return SourceResult.Success(trains)
+            }
+        }
+        return SourceResult.ParseFailed("")
     }
 
     private fun looksLikeLogin(p: Page): Boolean {
         if (PageParser.isLoaded(p.text)) return false
         val u = p.url.lowercase()
-        return p.hasPassword || "/login" in u || "/auth" in u || "/signin" in u
+        val onLoginRoute = "/login" in u || "/auth" in u || "/signin" in u
+        // A password box in the DOM is not enough (the site keeps one even when logged in); it must be visible.
+        return onLoginRoute || p.visiblePassword
     }
 
     private fun blockReason(p: Page): String? {
         if (PageParser.isLoaded(p.text)) return null
         return BLOCK_PATTERNS.firstOrNull { it.containsMatchIn(p.text) }
             ?.let { "The site shows a check page (\"${it.find(p.text)?.value}\")" }
+    }
+
+    /** Debug sample: URL, page text, the network calls seen, and the start of the search response. */
+    private fun summary(p: Page): String = buildString {
+        appendLine("URL: ${p.url}")
+        appendLine("Visible password field: ${p.visiblePassword}")
+        appendLine("Network calls seen (${p.responses.size}):")
+        p.responses.takeLast(15).forEach { appendLine("  ${it.status} ${it.url.take(160)}") }
+        p.responses.lastOrNull { isSearchApi(it.url) && it.body != null }?.let {
+            appendLine("Search response (start):")
+            appendLine(it.body!!.take(1500))
+        }
+        appendLine()
+        appendLine("Page text:")
+        append(p.text.take(1500))
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -161,6 +220,10 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
         )
         wv.layout(0, 0, WIDTH, HEIGHT)
         wv.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                if (!hookAtDocumentStart) view.evaluateJavascript(HOOK_JS, null)
+            }
+
             override fun onPageFinished(view: WebView, url: String?) {
                 if (url != null && url != "about:blank") tracker?.finished?.complete(Unit)
             }
@@ -187,10 +250,26 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
                 return true // handled: do not crash the app
             }
         }
+        installHook(wv)
         wv.onResume()
         wv.resumeTimers()
         webView = wv
         return wv
+    }
+
+    private var hookAtDocumentStart = false
+
+    /** Records the page's own XHR/fetch responses so trains can be read without rendering. */
+    private fun installHook(wv: WebView) {
+        hookAtDocumentStart = try {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                WebViewCompat.addDocumentStartJavaScript(wv, HOOK_JS, setOf(SiteUrls.BASE))
+                true
+            } else false
+        } catch (e: Exception) {
+            Log.w(TAG, "document-start script unavailable", e)
+            false
+        }
     }
 
     private fun destroyWebView() {
@@ -222,7 +301,23 @@ class WebViewSeatSource(private val app: Context) : SeatSource {
         private const val RECREATE_EVERY = 30
         private const val SAMPLE = 2048
 
-        private const val READ_JS = """(function(){try{return JSON.stringify({u:location.href,t:(document.body?document.body.innerText:''),p:!!document.querySelector('input[type=password]')});}catch(e){return JSON.stringify({u:'',t:'',p:false});}})()"""
+        private val SEARCH_API = Regex("search|trip|train", RegexOption.IGNORE_CASE)
+
+        private const val READ_JS = """(function(){try{
+var vis=false;var ps=document.querySelectorAll('input[type=password]');
+for(var i=0;i<ps.length;i++){var e=ps[i];var st=getComputedStyle(e);if(e.offsetWidth>0&&e.offsetHeight>0&&st.visibility!=='hidden'&&st.display!=='none'){vis=true;break;}}
+return JSON.stringify({u:location.href,t:(document.body?document.body.innerText:''),p:vis,r:(window.__bsw?window.__bsw.r:[])});
+}catch(e){return JSON.stringify({u:'',t:'',p:false,r:[]});}})()"""
+
+        /** Read-only: copies responses the page already received. Changes no request. */
+        private const val HOOK_JS = """(function(){if(window.__bsw)return;var B=window.__bsw={r:[]};
+function keep(u){return /search|trip|train/i.test(u||'')&&!/\.js(\?|$)/.test(u||'');}
+function rec(u,s,b){try{u=String(u||'');var e={u:u.slice(0,300),s:s|0};if(keep(u)&&typeof b==='string')e.b=b.slice(0,400000);B.r.push(e);if(B.r.length>40)B.r.shift();}catch(x){}}
+var F=window.fetch;if(F){window.fetch=function(i){var u=(i&&i.url)||i;return F.apply(this,arguments).then(function(res){try{if(keep(String(u))){res.clone().text().then(function(t){rec(u,res.status,t);},function(){rec(u,res.status,null);});}else rec(u,res.status,null);}catch(x){}return res;});};}
+var X=XMLHttpRequest.prototype,O=X.open,S=X.send;
+X.open=function(m,u){this.__bswu=u;return O.apply(this,arguments);};
+X.send=function(){var x=this;x.addEventListener('loadend',function(){var b=null;try{if(keep(String(x.__bswu))){if(x.responseType===''||x.responseType==='text')b=x.responseText;else if(x.responseType==='json')b=JSON.stringify(x.response);}}catch(e){}rec(x.__bswu,x.status,b);});return S.apply(this,arguments);};
+})();"""
 
         private val BLOCK_PATTERNS = listOf(
             Regex("captcha", RegexOption.IGNORE_CASE),
